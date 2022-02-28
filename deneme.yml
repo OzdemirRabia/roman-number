@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  CloudFormation Template is for Phonebook Application. The Phonebook Application aims to create a phonebook application in Python and deployed as a web application with Flask on AWS Application Load Balancer with Auto Scaling Group of Elastic Compute Cloud (EC2) Instances and Relational Database Service (RDS) using AWS Cloudformation Service.
+
+Parameters:
+  myVPC:
+    Description: Select your VPC
+    Type: AWS::EC2::VPC::Id
+
+  mySubnets:
+    Description: Select at least 2 subnets
+    Type: List<AWS::EC2::Subnet::Id>
+
+  myKP:
+    Description: Select your Key
+    Type: AWS::EC2::KeyPair::KeyName
+
+  myIT:
+    Description: Select instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+     - t2.micro
+     - t3.micro
+     - t2.nano
+     - t3.nano
+
+Mappings:
+  RegionImageMap:
+    us-east-1:
+      AMI: ami-0dc2d3e4c0f9ebd18
+    us-east-2:
+      AMI: ami-0233c2d874b811deb
+    us-west-1:
+      AMI: ami-0ed05376b59b90e46
+    us-west-2:
+      AMI: ami-0dc8f589abe99f538
+    eu-west-1:
+      AMI: ami-058b1b7fe545997ae
+
+Resources:
+  WebServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP for Flask Web Server and Ssh for entering to EC2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+         - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt ALBSG.GroupId
+      VpcId: !Ref myVPC
+
+  ALBSG:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Enable HTTP for Appl
+    SecurityGroupIngress:
+       - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !GetAtt ALBSG.GroupId
+    VpcId: !Ref myVPC  
+    
+
+WebServerLT:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateData:
+      ImageId: ami-033b95fb8079dc481
+      InstanceType: t2.micro
+      KeyName: firstkey
+      SecurityGroupIds:
+        - !GetAtt WebServerSG.GroupId
+      TagSpecifications:
+        - ResourceType: instance
+          - Key: Name
+                Value: !Sub Web Server of ${AWS::StackName} Stack
+      UserData: 
+        Fn::Base64:
+          !Sub 
+            - |
+              #! /bin/bash
+              yum update -y
+              yum install python3 -y
+              pip3 install flask
+              pip3 install flask_mysql
+              echo "${MyDBURI}" > /home/ec2-user/dbserver.endpoint
+              cd /home/ec2-user
+              wget https://raw.githubusercontent.com/durmusturk/004-phonebook-web-application/main/phonebook-app.py
+              mkdir templates
+              cd templates
+              wget https://raw.githubusercontent.com/durmusturk/004-phonebook-web-application/main/templates/index.html
+              wget https://raw.githubusercontent.com/durmusturk/004-phonebook-web-application/main/templates/delete.html
+              wget https://raw.githubusercontent.com/durmusturk/004-phonebook-web-application/main/templates/add-update.html
+              cd ..
+              python3 /home/ec2-user/phonebook-app.py
+
+Outputs:
